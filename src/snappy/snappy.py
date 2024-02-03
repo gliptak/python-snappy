@@ -44,12 +44,8 @@ from __future__ import absolute_import
 import sys
 import struct
 
-try:
-    from ._snappy import UncompressError, compress, decompress, \
-                         isValidCompressed, uncompress, _crc32c
-except ImportError:
-    from .snappy_cffi import UncompressError, compress, decompress, \
-                             isValidCompressed, uncompress, _crc32c
+import cramjam
+import crc32c
 
 _CHUNK_MAX = 65536
 _STREAM_TO_STREAM_BLOCK_SIZE = _CHUNK_MAX
@@ -66,17 +62,34 @@ _COMPRESSION_THRESHOLD = .125
 
 def _masked_crc32c(data):
     # see the framing format specification
-    crc = _crc32c(data)
+    crc = crc32c.crc32c(data)
     return (((crc >> 15) | (crc << 17)) + 0xa282ead8) & 0xffffffff
 
-_compress = compress
-_uncompress = uncompress
+_compress = cramjam.snappy.compress
+_uncompress = cramjam.snappy.decompress
+
+
+class UncompressError(Exception):
+    pass
 
 
 py3k = False
 if sys.hexversion > 0x03000000:
     unicode = str
     py3k = True
+
+
+def isValidCompressed(data):
+    if isinstance(data, unicode):
+        data = data.encode('utf-8')
+
+    ok = True
+    try:
+        decompress(data)
+    except UncompressError as err:
+        ok = False
+    return ok
+
 
 def compress(data, encoding='utf-8'):
     if isinstance(data, unicode):
